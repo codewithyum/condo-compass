@@ -99,7 +99,6 @@ export async function autocompletePlaces(
     return [];
   }
 }
-}
 
 /* ------------------------------------------------------------------ */
 /* OSM buildings — uses free Overpass API (no key required)          */
