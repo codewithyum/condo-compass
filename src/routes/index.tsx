@@ -87,6 +87,8 @@ function Index() {
             onSortKey={setSortKey}
             showNoReviews={showNoReviews}
             onToggleNoReviews={setShowNoReviews}
+            showUncertain={showUncertain}
+            onToggleUncertain={setShowUncertain}
           />
         </aside>
 
@@ -96,6 +98,7 @@ function Index() {
             results={scanner.results}
             selectedId={scanner.selectedId}
             showNoReviews={showNoReviews}
+            showUncertain={showUncertain}
             onSelect={scanner.setSelectedId}
           />
         </main>
