@@ -6,6 +6,7 @@ import type {
   GoogleReview,
   OsmBuilding,
   OsmTags,
+  PlaceSuggestion,
   RedditMention,
   ReviewSort,
 } from "../types";
@@ -38,6 +39,65 @@ export async function geocode(input: string): Promise<GeocodeResult> {
     throw new Error(
       err instanceof Error ? err.message : "Failed to geocode location",
     );
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Autocomplete suggestions                                           */
+/*                                                                    */
+/* Uses free OSM Nominatim search (no key required). Structured so a  */
+/* keyed provider (Google Places Autocomplete, Mapbox, etc.) can be   */
+/* swapped in later behind this same server-side function.            */
+/* ------------------------------------------------------------------ */
+
+interface NominatimResult {
+  place_id: number;
+  lat: string;
+  lon: string;
+  display_name: string;
+  name?: string;
+  type?: string;
+  address?: Record<string, string>;
+}
+
+function suggestionLabel(r: NominatimResult): string {
+  if (r.name) return r.name;
+  const a = r.address ?? {};
+  return (
+    a.building ||
+    a.house_name ||
+    a.road ||
+    a.neighbourhood ||
+    a.suburb ||
+    a.station ||
+    a.city ||
+    r.display_name.split(",")[0] ||
+    "Location"
+  );
+}
+
+export async function autocompletePlaces(
+  query: string,
+): Promise<PlaceSuggestion[]> {
+  // Real provider hook: if a Google key exists later, branch here.
+  // For now Nominatim provides real, key-less suggestions.
+  const url =
+    `https://nominatim.openstreetmap.org/search?format=jsonv2` +
+    `&limit=6&addressdetails=1&q=${encodeURIComponent(query)}`;
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+    if (!res.ok) throw new Error(`Autocomplete responded ${res.status}`);
+    const data = (await res.json()) as NominatimResult[];
+    return data.map((r) => ({
+      id: String(r.place_id),
+      label: suggestionLabel(r),
+      description: r.display_name,
+      lat: Number(r.lat),
+      lng: Number(r.lon),
+    }));
+  } catch {
+    // Fail soft — autocomplete is non-critical; user can still free-text search.
+    return [];
   }
 }
 

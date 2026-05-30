@@ -13,6 +13,17 @@ export interface GeocodeResult {
   displayName: string;
 }
 
+export interface PlaceSuggestion {
+  /** Stable id for list keys */
+  id: string;
+  /** Short primary label, e.g. place / building name */
+  label: string;
+  /** Full address / context line */
+  description: string;
+  lat: number;
+  lng: number;
+}
+
 export interface GoogleReview {
   author: string;
   rating: number;
