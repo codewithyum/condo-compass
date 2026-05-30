@@ -6,6 +6,7 @@ import type {
   GoogleReview,
   OsmBuilding,
   OsmTags,
+  PlaceSuggestion,
   RedditMention,
   ReviewSort,
 } from "../types";
