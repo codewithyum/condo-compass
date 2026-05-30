@@ -694,18 +694,14 @@ export function buildSummary(
 
   if (!hasReviews) {
     return {
-      summary: [
-        `${label} is a ${building.residentialStatus.toLowerCase()}.`,
-        "No public reviews found on Google or Reddit.",
-        "Not enough data to recommend — treat as unknown.",
-      ],
+      summary: [NOT_ENOUGH_CONTENT],
       recommendationScore: null,
       confidenceLevel: "Low",
       hasReviews: false,
     };
   }
 
-  // Transparent score 0-100
+  // Transparent score 0-100 (metadata-driven — stays out of the summary text)
   let score = 50;
   if (hasGoogle) {
     score = Math.round(((google.googleRating ?? 3) / 5) * 100);
@@ -718,26 +714,19 @@ export function buildSummary(
   score += redditPos * 4 - redditNeg * 6;
   score = Math.max(0, Math.min(100, score));
 
-  const line1 = hasGoogle
-    ? `${label} holds a ${google.googleRating}★ Google rating across ${google.googleReviewCount} reviews.`
-    : `${label} has no Google rating but is discussed on Reddit.`;
-  const line2 = hasReddit
-    ? `Reddit: ${redditPos} positive, ${redditNeg} negative of ${reddit.length} mention(s).`
-    : "No Reddit mentions found for this building.";
-  const verdict =
-    score >= 75
-      ? "Generally well-regarded by residents."
-      : score >= 55
-        ? "Mixed but mostly acceptable feedback."
-        : "Notable concerns — research further before committing.";
+  // Summary is built ONLY from review text content, never from metadata such
+  // as rating, review count, or source availability.
+  const texts = collectReviewTexts(google, reddit);
+  const summary = summariseReviewContent(texts) ?? [NOT_ENOUGH_CONTENT];
 
   return {
-    summary: [line1, line2, verdict],
+    summary,
     recommendationScore: score,
     confidenceLevel,
     hasReviews: true,
   };
 }
+
 
 /* ------------------------------------------------------------------ */
 /* Full enrichment for one building                                   */
