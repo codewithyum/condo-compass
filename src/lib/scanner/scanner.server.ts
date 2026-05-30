@@ -476,6 +476,197 @@ function inferSentiment(text: string): RedditMention["sentiment"] {
 }
 
 /* ------------------------------------------------------------------ */
+/* Review-content summary (text-based, not metadata)                  */
+/*                                                                    */
+/* Analyses the actual text of Google reviews and Reddit mentions to  */
+/* surface recurring resident-facing themes. Structured so a real LLM */
+/* summariser can be swapped in later (see summariseWithLlm hook):    */
+/* it would receive the same `texts` array and be instructed to       */
+/* summarise review *content*, never API result status/metadata.      */
+/* ------------------------------------------------------------------ */
+
+type Sentiment = "positive" | "neutral" | "negative";
+
+interface ReviewText {
+  text: string;
+  sentiment: Sentiment;
+}
+
+interface Theme {
+  key: string;
+  /** Phrasing used when the theme shows up positively */
+  positive: string;
+  /** Phrasing used when the theme shows up negatively */
+  negative: string;
+  keywords: string[];
+  /** Words that flip the meaning of an otherwise-neutral keyword */
+  negativeCues?: string[];
+}
+
+const THEMES: Theme[] = [
+  {
+    key: "location",
+    positive: "the convenient location and walkability",
+    negative: "the location or surroundings",
+    keywords: ["location", "walk", "walkable", "transit", "skytrain", "subway", "convenient", "close to", "downtown", "shops", "restaurants", "central"],
+  },
+  {
+    key: "maintenance",
+    positive: "how well the building is maintained",
+    negative: "maintenance quality and slow repairs",
+    keywords: ["maintenance", "maintained", "repair", "repairs", "upkeep", "fixed", "broken", "run down", "rundown", "plumbing", "leak"],
+    negativeCues: ["slow", "forever", "broken", "issue", "issues", "leak", "run down", "rundown", "wait", "never"],
+  },
+  {
+    key: "noise",
+    positive: "how quiet the building is",
+    negative: "noise levels and thin walls",
+    keywords: ["noise", "noisy", "quiet", "loud", "thin wall", "thin walls", "soundproof"],
+    negativeCues: ["noise", "noisy", "loud", "thin"],
+  },
+  {
+    key: "management",
+    positive: "responsive management and helpful staff",
+    negative: "management responsiveness and strata handling",
+    keywords: ["management", "manager", "strata", "landlord", "responsive", "staff", "concierge", "board"],
+    negativeCues: ["unresponsive", "slow", "rising", "rise", "ignore", "ignored", "forever", "issue", "issues", "twice"],
+  },
+  {
+    key: "amenities",
+    positive: "the amenities on offer",
+    negative: "limited or poorly kept amenities",
+    keywords: ["amenities", "amenity", "gym", "pool", "lounge", "rooftop"],
+  },
+  {
+    key: "elevator",
+    positive: "reliable elevators",
+    negative: "slow or unreliable elevators",
+    keywords: ["elevator", "elevators", "lift"],
+    negativeCues: ["slow", "wait", "broken", "out of service", "peak"],
+  },
+  {
+    key: "safety",
+    positive: "a sense of safety and good security",
+    negative: "safety and security concerns",
+    keywords: ["safe", "safety", "security", "secure", "crime", "break-in", "break in", "unsafe"],
+    negativeCues: ["unsafe", "crime", "break-in", "break in"],
+  },
+  {
+    key: "cleanliness",
+    positive: "clean, well-kept common areas",
+    negative: "cleanliness of common areas",
+    keywords: ["clean", "cleanliness", "dirty", "filthy", "tidy", "garbage", "trash"],
+    negativeCues: ["dirty", "filthy", "garbage", "trash"],
+  },
+  {
+    key: "parking",
+    positive: "convenient parking",
+    negative: "tight or limited parking",
+    keywords: ["parking", "garage", "stall"],
+    negativeCues: ["tight", "limited", "no parking", "hard"],
+  },
+  {
+    key: "value",
+    positive: "good value for the price",
+    negative: "rising fees and value for money",
+    keywords: ["value", "price", "fees", "strata fees", "expensive", "affordable", "worth", "rent"],
+    negativeCues: ["rising", "rise", "expensive", "high", "keep rising"],
+  },
+];
+
+/** Collect every usable review text with a coarse sentiment. */
+function collectReviewTexts(
+  google: GoogleData,
+  reddit: RedditMention[],
+): ReviewText[] {
+  const texts: ReviewText[] = [];
+  for (const rv of google.googleReviews) {
+    const t = rv.text?.trim();
+    if (!t) continue;
+    const sentiment: Sentiment =
+      rv.rating >= 4 ? "positive" : rv.rating <= 2 ? "negative" : "neutral";
+    texts.push({ text: t, sentiment });
+  }
+  for (const m of reddit) {
+    const t = (m.snippet || m.title)?.trim();
+    if (!t) continue;
+    texts.push({ text: t, sentiment: m.sentiment });
+  }
+  return texts;
+}
+
+/**
+ * Produce a 3-line summary of what reviewers actually say. Returns null when
+ * there is not enough review text to say anything meaningful.
+ */
+function summariseReviewContent(texts: ReviewText[]): string[] | null {
+  const usable = texts.filter((t) => t.text.replace(/\s+/g, " ").length >= 15);
+  if (usable.length < 2) return null;
+
+  const pos: string[] = [];
+  const neg: string[] = [];
+
+  for (const theme of THEMES) {
+    let posHits = 0;
+    let negHits = 0;
+    for (const { text, sentiment } of usable) {
+      const lower = text.toLowerCase();
+      if (!theme.keywords.some((k) => lower.includes(k))) continue;
+      const hasNegCue = theme.negativeCues?.some((c) => lower.includes(c));
+      if (sentiment === "negative" || hasNegCue) negHits += 1;
+      else if (sentiment === "positive") posHits += 1;
+      else negHits += 0; // neutral with no cue: ignore for sentiment
+    }
+    if (posHits === 0 && negHits === 0) continue;
+    if (posHits >= negHits && posHits > 0) pos.push(theme.positive);
+    else if (negHits > 0) neg.push(theme.negative);
+  }
+
+  const lines: string[] = [];
+  if (pos.length) {
+    lines.push(
+      `Residents often highlight ${joinPhrases(pos.slice(0, 2))}.`,
+    );
+  }
+  if (neg.length) {
+    lines.push(
+      `Some reviews raise concerns about ${joinPhrases(neg.slice(0, 2))}.`,
+    );
+  }
+
+  // Overall line, grounded only in what the texts support.
+  if (pos.length && neg.length) {
+    lines.push(
+      "Feedback is mixed overall, so check recent reviews before deciding.",
+    );
+  } else if (pos.length && !neg.length) {
+    lines.push("Reviews skew positive, with few recurring complaints.");
+  } else if (neg.length && !pos.length) {
+    lines.push("Reviews lean negative, so research further before committing.");
+  }
+
+  // If no themes matched at all, fall back to sentiment balance from the texts.
+  if (lines.length === 0) {
+    const p = usable.filter((t) => t.sentiment === "positive").length;
+    const n = usable.filter((t) => t.sentiment === "negative").length;
+    if (p > n) lines.push("Most reviewers speak positively about living here.");
+    else if (n > p)
+      lines.push("Several reviewers express dissatisfaction about living here.");
+    else lines.push("Reviewer opinions are split between positive and negative.");
+  }
+
+  return lines.slice(0, 3);
+}
+
+function joinPhrases(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+const NOT_ENOUGH_CONTENT =
+  "Not enough review content is available to generate a meaningful summary.";
+
+/* ------------------------------------------------------------------ */
 /* Summary, score & confidence                                       */
 /* ------------------------------------------------------------------ */
 
@@ -489,7 +680,6 @@ export function buildSummary(
   confidenceLevel: ConfidenceLevel;
   hasReviews: boolean;
 } {
-  const label = building.name ?? building.address ?? "This building";
   const hasGoogle = google.googleRating != null;
   const hasReddit = reddit.length > 0;
   const hasReviews = hasGoogle || hasReddit;
@@ -503,18 +693,14 @@ export function buildSummary(
 
   if (!hasReviews) {
     return {
-      summary: [
-        `${label} is a ${building.residentialStatus.toLowerCase()}.`,
-        "No public reviews found on Google or Reddit.",
-        "Not enough data to recommend — treat as unknown.",
-      ],
+      summary: [NOT_ENOUGH_CONTENT],
       recommendationScore: null,
       confidenceLevel: "Low",
       hasReviews: false,
     };
   }
 
-  // Transparent score 0-100
+  // Transparent score 0-100 (metadata-driven — stays out of the summary text)
   let score = 50;
   if (hasGoogle) {
     score = Math.round(((google.googleRating ?? 3) / 5) * 100);
@@ -527,26 +713,19 @@ export function buildSummary(
   score += redditPos * 4 - redditNeg * 6;
   score = Math.max(0, Math.min(100, score));
 
-  const line1 = hasGoogle
-    ? `${label} holds a ${google.googleRating}★ Google rating across ${google.googleReviewCount} reviews.`
-    : `${label} has no Google rating but is discussed on Reddit.`;
-  const line2 = hasReddit
-    ? `Reddit: ${redditPos} positive, ${redditNeg} negative of ${reddit.length} mention(s).`
-    : "No Reddit mentions found for this building.";
-  const verdict =
-    score >= 75
-      ? "Generally well-regarded by residents."
-      : score >= 55
-        ? "Mixed but mostly acceptable feedback."
-        : "Notable concerns — research further before committing.";
+  // Summary is built ONLY from review text content, never from metadata such
+  // as rating, review count, or source availability.
+  const texts = collectReviewTexts(google, reddit);
+  const summary = summariseReviewContent(texts) ?? [NOT_ENOUGH_CONTENT];
 
   return {
-    summary: [line1, line2, verdict],
+    summary,
     recommendationScore: score,
     confidenceLevel,
     hasReviews: true,
   };
 }
+
 
 /* ------------------------------------------------------------------ */
 /* Full enrichment for one building                                   */
