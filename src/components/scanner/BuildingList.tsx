@@ -101,6 +101,21 @@ export function BuildingList({
         />
       </div>
 
+      <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+        <Label
+          htmlFor="show-uncertain"
+          className="text-xs text-muted-foreground"
+        >
+          Show uncertain &amp; mixed-use buildings
+        </Label>
+        <Switch
+          id="show-uncertain"
+          checked={showUncertain}
+          onCheckedChange={onToggleUncertain}
+        />
+      </div>
+
+
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
         {visible.map((b) => (
           <BuildingCard
