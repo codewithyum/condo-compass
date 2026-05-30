@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import {
+  autocompletePlaces,
   enrichBuilding,
   fetchOsmBuildings,
   filterResidentialBuildings,
@@ -9,6 +10,19 @@ import type { OsmBuilding, ReviewSort } from "../types";
 
 const RADIUS_METERS = 1000;
 const MAX_BUILDINGS = 24;
+
+/** Autocomplete suggestions for the search input (debounced on client). */
+export const autocompleteLocation = createServerFn({ method: "POST" })
+  .inputValidator((data: { query: string }) => {
+    const query = (data?.query ?? "").trim();
+    if (query.length > 200) throw new Error("Query is too long.");
+    return { query };
+  })
+  .handler(async ({ data }) => {
+    if (data.query.length < 3) return { suggestions: [] };
+    const suggestions = await autocompletePlaces(data.query);
+    return { suggestions };
+  });
 
 /** Steps 4-6: geocode input, fetch OSM buildings, keep residential ones. */
 export const scanLocation = createServerFn({ method: "POST" })
