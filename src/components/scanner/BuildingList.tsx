@@ -151,12 +151,12 @@ export function BuildingList({
           </div>
         )}
 
-        {!showNoReviews &&
-          results.length > 0 &&
+        {results.length > 0 &&
           visible.length === 0 &&
           !enriching && (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              No buildings with public reviews. Toggle above to show all.
+              All buildings are hidden by the filters above. Toggle them to show
+              more.
             </div>
           )}
       </div>
