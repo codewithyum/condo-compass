@@ -680,7 +680,6 @@ export function buildSummary(
   confidenceLevel: ConfidenceLevel;
   hasReviews: boolean;
 } {
-  const label = building.name ?? building.address ?? "This building";
   const hasGoogle = google.googleRating != null;
   const hasReddit = reddit.length > 0;
   const hasReviews = hasGoogle || hasReddit;
