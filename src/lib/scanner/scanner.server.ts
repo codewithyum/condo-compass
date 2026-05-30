@@ -1,4 +1,4 @@
-import { scoreResidential, statusFromScore } from "../residential";
+import { classifyResidential, hasResidentialSignal } from "../residential";
 import type {
   BuildingResult,
   ConfidenceLevel,
