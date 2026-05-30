@@ -167,20 +167,11 @@
   background: var(--color-muted);
   /* Confine Leaflet's internal high z-indexes (panes up to 700, controls up
      to 1000) into a single low stacking context so they can never paint over
-     the building detail modal/overlay (which render at z-index 50+). */
+     the building detail modal/overlay (which render at z-index 50+). The
+     internal pane/control ordering is preserved inside this context. */
   position: relative;
   z-index: 0;
   isolation: isolate;
-}
-
-/* Keep panes, controls and popups inside the map's stacking context. */
-.leaflet-pane,
-.leaflet-top,
-.leaflet-bottom,
-.leaflet-control-container,
-.leaflet-popup-pane,
-.leaflet-tooltip-pane {
-  z-index: 1;
 }
 
 .scanner-bubble {
