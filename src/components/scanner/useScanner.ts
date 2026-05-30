@@ -35,7 +35,11 @@ export function useScanner() {
   const [usedMock, setUsedMock] = useState(false);
 
   const search = useCallback(
-    async (input: string, sort: ReviewSort) => {
+    async (
+      input: string,
+      sort: ReviewSort,
+      coords?: { lat: number; lng: number; displayName?: string } | null,
+    ) => {
       setError(null);
       setResults([]);
       setSelectedId(null);
@@ -44,7 +48,14 @@ export function useScanner() {
       setPhase("geocoding");
       try {
         setPhase("fetching");
-        const scan = await runScan({ data: { input } });
+        const scan = await runScan({
+          data: {
+            input,
+            lat: coords?.lat,
+            lng: coords?.lng,
+            displayName: coords?.displayName,
+          },
+        });
         setLocation(scan.location);
         setScannedTotalBuildings(scan.totalBuildings);
         setTotal(scan.buildings.length);
