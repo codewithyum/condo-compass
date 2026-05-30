@@ -54,12 +54,28 @@ export function ConfidenceBadge({ level }: { level: ConfidenceLevel }) {
 }
 
 export function ResidentialBadge({ status }: { status: ResidentialStatus }) {
-  const tone =
-    status === "Likely residential"
-      ? "bg-info/15 text-info"
-      : "bg-muted text-muted-foreground";
-  const label =
-    status === "Likely residential" ? "Likely residential" : "Possible residential";
+  const config: Record<
+    ResidentialStatus,
+    { label: string; tone: string }
+  > = {
+    "Likely residential": {
+      label: "Residential",
+      tone: "bg-success/15 text-success",
+    },
+    "Possible residential building": {
+      label: "Possible residential",
+      tone: "bg-info/15 text-info",
+    },
+    "Possible mixed-use residential building": {
+      label: "Possible mixed-use residential",
+      tone: "bg-warning/20 text-warning-foreground",
+    },
+    "Unlikely residential": {
+      label: "Not residential",
+      tone: "bg-muted text-muted-foreground",
+    },
+  };
+  const { label, tone } = config[status] ?? config["Unlikely residential"];
   return (
     <span
       className={cn(
