@@ -76,6 +76,7 @@ export default function ScannerMap({
   results,
   selectedId,
   showNoReviews,
+  showUncertain,
   onSelect,
 }: Props) {
   const center: [number, number] = location
