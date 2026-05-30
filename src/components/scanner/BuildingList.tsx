@@ -44,10 +44,20 @@ export function BuildingList({
   onSortKey,
   showNoReviews,
   onToggleNoReviews,
+  showUncertain,
+  onToggleUncertain,
 }: Props) {
-  const visible = showNoReviews
-    ? results
-    : results.filter((r) => r.hasReviews);
+  const visible = results.filter((r) => {
+    if (!showNoReviews && !r.hasReviews) return false;
+    if (
+      !showUncertain &&
+      (r.residentialStatus === "Possible residential building" ||
+        r.residentialStatus === "Possible mixed-use residential building")
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   const enriching = phase === "enriching";
   const isEmpty =
