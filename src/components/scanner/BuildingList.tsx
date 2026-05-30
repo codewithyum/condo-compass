@@ -22,6 +22,8 @@ interface Props {
   onSortKey: (k: ListSortKey) => void;
   showNoReviews: boolean;
   onToggleNoReviews: (v: boolean) => void;
+  showUncertain: boolean;
+  onToggleUncertain: (v: boolean) => void;
 }
 
 const SORT_LABELS: Record<ListSortKey, string> = {
@@ -42,10 +44,20 @@ export function BuildingList({
   onSortKey,
   showNoReviews,
   onToggleNoReviews,
+  showUncertain,
+  onToggleUncertain,
 }: Props) {
-  const visible = showNoReviews
-    ? results
-    : results.filter((r) => r.hasReviews);
+  const visible = results.filter((r) => {
+    if (!showNoReviews && !r.hasReviews) return false;
+    if (
+      !showUncertain &&
+      (r.residentialStatus === "Possible residential building" ||
+        r.residentialStatus === "Possible mixed-use residential building")
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   const enriching = phase === "enriching";
   const isEmpty =
@@ -89,6 +101,21 @@ export function BuildingList({
         />
       </div>
 
+      <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+        <Label
+          htmlFor="show-uncertain"
+          className="text-xs text-muted-foreground"
+        >
+          Show uncertain &amp; mixed-use buildings
+        </Label>
+        <Switch
+          id="show-uncertain"
+          checked={showUncertain}
+          onCheckedChange={onToggleUncertain}
+        />
+      </div>
+
+
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
         {visible.map((b) => (
           <BuildingCard
@@ -124,12 +151,12 @@ export function BuildingList({
           </div>
         )}
 
-        {!showNoReviews &&
-          results.length > 0 &&
+        {results.length > 0 &&
           visible.length === 0 &&
           !enriching && (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              No buildings with public reviews. Toggle above to show all.
+              All buildings are hidden by the filters above. Toggle them to show
+              more.
             </div>
           )}
       </div>

@@ -9,6 +9,7 @@ interface Props {
   results: BuildingResult[];
   selectedId: string | null;
   showNoReviews: boolean;
+  showUncertain: boolean;
   onSelect: (id: string) => void;
 }
 
@@ -75,6 +76,7 @@ export default function ScannerMap({
   results,
   selectedId,
   showNoReviews,
+  showUncertain,
   onSelect,
 }: Props) {
   const center: [number, number] = location
@@ -104,6 +106,13 @@ export default function ScannerMap({
 
       {results.map((b) => {
         if (!b.hasReviews && !showNoReviews) return null;
+        if (
+          !showUncertain &&
+          (b.residentialStatus === "Possible residential building" ||
+            b.residentialStatus === "Possible mixed-use residential building")
+        ) {
+          return null;
+        }
         const icon = b.hasReviews
           ? bubbleIcon(b, b.id === selectedId)
           : dotIcon();

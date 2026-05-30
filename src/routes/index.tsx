@@ -32,6 +32,7 @@ function Index() {
   const scanner = useScanner();
   const [sortKey, setSortKey] = useState<ListSortKey>("recommendation");
   const [showNoReviews, setShowNoReviews] = useState(true);
+  const [showUncertain, setShowUncertain] = useState(true);
 
   const loading =
     scanner.phase === "geocoding" ||
@@ -86,6 +87,8 @@ function Index() {
             onSortKey={setSortKey}
             showNoReviews={showNoReviews}
             onToggleNoReviews={setShowNoReviews}
+            showUncertain={showUncertain}
+            onToggleUncertain={setShowUncertain}
           />
         </aside>
 
@@ -95,6 +98,7 @@ function Index() {
             results={scanner.results}
             selectedId={scanner.selectedId}
             showNoReviews={showNoReviews}
+            showUncertain={showUncertain}
             onSelect={scanner.setSelectedId}
           />
         </main>
