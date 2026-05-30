@@ -22,6 +22,8 @@ interface Props {
   onSortKey: (k: ListSortKey) => void;
   showNoReviews: boolean;
   onToggleNoReviews: (v: boolean) => void;
+  showUncertain: boolean;
+  onToggleUncertain: (v: boolean) => void;
 }
 
 const SORT_LABELS: Record<ListSortKey, string> = {
