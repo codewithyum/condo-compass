@@ -39,6 +39,7 @@ export async function geocode(input: string): Promise<GeocodeResult> {
     throw new Error(
       err instanceof Error ? err.message : "Failed to geocode location",
     );
+  }
 }
 
 /* ------------------------------------------------------------------ */
