@@ -26,14 +26,43 @@ export const autocompleteLocation = createServerFn({ method: "POST" })
 
 /** Steps 4-6: geocode input, fetch OSM buildings, keep residential ones. */
 export const scanLocation = createServerFn({ method: "POST" })
-  .inputValidator((data: { input: string }) => {
-    const input = (data?.input ?? "").trim();
-    if (!input) throw new Error("Please enter a location to search.");
-    if (input.length > 200) throw new Error("Location is too long.");
-    return { input };
-  })
+  .inputValidator(
+    (data: {
+      input: string;
+      lat?: number;
+      lng?: number;
+      displayName?: string;
+    }) => {
+      const input = (data?.input ?? "").trim();
+      if (!input) throw new Error("Please enter a location to search.");
+      if (input.length > 200) throw new Error("Location is too long.");
+      const hasCoords =
+        typeof data.lat === "number" &&
+        Number.isFinite(data.lat) &&
+        typeof data.lng === "number" &&
+        Number.isFinite(data.lng);
+      return {
+        input,
+        lat: hasCoords ? data.lat : undefined,
+        lng: hasCoords ? data.lng : undefined,
+        displayName:
+          typeof data.displayName === "string"
+            ? data.displayName.slice(0, 300)
+            : undefined,
+      };
+    },
+  )
   .handler(async ({ data }) => {
-    const location = await geocode(data.input);
+    // Use coordinates from a selected suggestion when available; otherwise
+    // fall back to geocoding the typed text.
+    const location =
+      data.lat != null && data.lng != null
+        ? {
+            lat: data.lat,
+            lng: data.lng,
+            displayName: data.displayName ?? data.input,
+          }
+        : await geocode(data.input);
     const all = await fetchOsmBuildings(
       location.lat,
       location.lng,
