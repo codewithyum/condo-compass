@@ -106,6 +106,13 @@ export default function ScannerMap({
 
       {results.map((b) => {
         if (!b.hasReviews && !showNoReviews) return null;
+        if (
+          !showUncertain &&
+          (b.residentialStatus === "Possible residential building" ||
+            b.residentialStatus === "Possible mixed-use residential building")
+        ) {
+          return null;
+        }
         const icon = b.hasReviews
           ? bubbleIcon(b, b.id === selectedId)
           : dotIcon();
