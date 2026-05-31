@@ -176,6 +176,8 @@ export async function fetchOsmBuildings(
 ): Promise<OsmBuilding[]> {
   // Query both whole buildings AND building:parts — mixed-use developments
   // (e.g. Solo District) tag residential towers as building:part=apartments.
+  // Fetch ways + relations, and ask for geometry + center so relation/multi-
+  // polygon buildings still resolve to a usable coordinate.
   const query = `
     [out:json][timeout:25];
     (
@@ -184,7 +186,7 @@ export async function fetchOsmBuildings(
       way["building:part"](around:${radiusMeters},${lat},${lng});
       relation["building:part"](around:${radiusMeters},${lat},${lng});
     );
-    out tags center;`;
+    out center tags;`;
 
   const res = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",
