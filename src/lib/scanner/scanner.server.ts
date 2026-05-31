@@ -178,7 +178,7 @@ export async function fetchOsmBuildings(
       lng: blng,
       tags,
       residentialScore: score,
-      residentialStatus: statusFromScore(score),
+      residentialStatus: statusFromScore(score, tags),
       distanceMeters: haversine(lat, lng, blat, blng),
     });
   }
