@@ -57,9 +57,15 @@ export function ResidentialBadge({ status }: { status: ResidentialStatus }) {
   const tone =
     status === "Likely residential"
       ? "bg-info/15 text-info"
-      : "bg-muted text-muted-foreground";
+      : status === "Possible mixed-use residential building"
+        ? "bg-warning/20 text-warning-foreground"
+        : "bg-muted text-muted-foreground";
   const label =
-    status === "Likely residential" ? "Likely residential" : "Possible residential";
+    status === "Likely residential"
+      ? "Likely residential"
+      : status === "Possible mixed-use residential building"
+        ? "Mixed-use residential"
+        : "Possible residential";
   return (
     <span
       className={cn(
