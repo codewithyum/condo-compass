@@ -137,18 +137,23 @@ interface OverpassElement {
   tags?: OsmTags;
 }
 
-export async function fetchOsmBuildings(
+/** Friendly, non-crashing message when OSM is overloaded/timing out. */
+export const OVERPASS_BUSY_MESSAGE =
+  "OpenStreetMap is taking too long to respond. Try again or use a smaller radius.";
+
+async function fetchOverpassOnce(
   lat: number,
   lng: number,
   radiusMeters: number,
-): Promise<OsmBuilding[]> {
-  const query = `
-    [out:json][timeout:25];
-    (
-      way["building"](around:${radiusMeters},${lat},${lng});
-      relation["building"](around:${radiusMeters},${lat},${lng});
-    );
-    out tags center;`;
+): Promise<OverpassElement[]> {
+  // Lightweight query: center coordinates only (out center qt). No geometry,
+  // no building:part, no recursion — the map only needs marker centers.
+  const query = `[out:json][timeout:20];
+(
+  way(around:${radiusMeters},${lat},${lng})["building"];
+  relation(around:${radiusMeters},${lat},${lng})["building"];
+);
+out center qt;`;
 
   const res = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",
@@ -160,9 +165,42 @@ export async function fetchOsmBuildings(
   });
   if (!res.ok) throw new Error(`Overpass responded ${res.status}`);
   const data = (await res.json()) as { elements: OverpassElement[] };
+  return data.elements ?? [];
+}
+
+export async function fetchOsmBuildings(
+  lat: number,
+  lng: number,
+  radiusMeters: number,
+): Promise<OsmBuilding[]> {
+  // Retry with progressively smaller radii on timeout/overload (504/429),
+  // instead of crashing or returning a blank screen.
+  const radii = [radiusMeters, 750, 500].filter(
+    (r, i, arr) => r <= radiusMeters && arr.indexOf(r) === i,
+  );
+
+  let elements: OverpassElement[] | null = null;
+  let lastError: unknown = null;
+  for (const r of radii) {
+    try {
+      elements = await fetchOverpassOnce(lat, lng, r);
+      break;
+    } catch (err) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message : "";
+      const retriable =
+        /\b(504|429|408|502|503)\b/.test(msg) || /timeout/i.test(msg);
+      if (!retriable) break;
+    }
+  }
+
+  if (elements == null) {
+    console.error("Overpass failed after retries:", lastError);
+    throw new Error(OVERPASS_BUSY_MESSAGE);
+  }
 
   const buildings: OsmBuilding[] = [];
-  for (const el of data.elements ?? []) {
+  for (const el of elements) {
     const tags = el.tags ?? {};
     const blat = el.lat ?? el.center?.lat;
     const blng = el.lon ?? el.center?.lon;
