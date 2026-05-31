@@ -176,6 +176,8 @@ export async function fetchOsmBuildings(
 ): Promise<OsmBuilding[]> {
   // Query both whole buildings AND building:parts — mixed-use developments
   // (e.g. Solo District) tag residential towers as building:part=apartments.
+  // Fetch ways + relations, and ask for geometry + center so relation/multi-
+  // polygon buildings still resolve to a usable coordinate.
   const query = `
     [out:json][timeout:25];
     (
@@ -184,7 +186,7 @@ export async function fetchOsmBuildings(
       way["building:part"](around:${radiusMeters},${lat},${lng});
       relation["building:part"](around:${radiusMeters},${lat},${lng});
     );
-    out tags center;`;
+    out center tags;`;
 
   const res = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",
@@ -254,7 +256,61 @@ export async function fetchOsmBuildings(
       distanceMeters: haversine(lat, lng, raw.lat, raw.lng),
     });
   }
+
+  debugLogBuildings(buildings);
+
   return buildings;
+}
+
+/**
+ * Temporary debug logging: dump all raw OSM buildings (pre-filter) with the
+ * tags that drive residential classification, plus a focused search for known
+ * condo developments (Solo District, Stratus, Altus, Cirrus, Rosser, Skyline).
+ */
+const DEBUG_NAME_TERMS = [
+  "solo",
+  "stratus",
+  "altus",
+  "cirrus",
+  "rosser",
+  "skyline",
+];
+
+function debugLogBuildings(buildings: OsmBuilding[]): void {
+  console.log(`[OSM debug] ${buildings.length} raw buildings within radius`);
+  for (const b of buildings) {
+    const t = b.tags;
+    console.log("[OSM debug] building", {
+      id: b.id,
+      name: b.name,
+      building: t.building,
+      "building:part": t["building:part"],
+      "building:use": t["building:use"],
+      residential: t.residential,
+      "building:levels": t["building:levels"],
+      height: t.height ?? t["building:height"],
+      shop: t.shop,
+      office: t.office,
+      address: b.address,
+      score: b.residentialScore,
+      status: b.residentialStatus,
+    });
+  }
+
+  const matches = buildings.filter((b) => {
+    const hay = `${b.name ?? ""} ${b.address ?? ""}`.toLowerCase();
+    return DEBUG_NAME_TERMS.some((term) => hay.includes(term));
+  });
+  console.log(
+    `[OSM debug] ${matches.length} buildings match known condo terms`,
+    matches.map((b) => ({
+      id: b.id,
+      name: b.name,
+      address: b.address,
+      score: b.residentialScore,
+      status: b.residentialStatus,
+    })),
+  );
 }
 
 /**
