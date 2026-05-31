@@ -3,7 +3,6 @@ export type ReviewSort = "most_relevant" | "newest";
 export type ResidentialStatus =
   | "Likely residential"
   | "Possible residential building"
-  | "Possible mixed-use residential building"
   | "Unlikely residential";
 
 export type ConfidenceLevel = "Low" | "Medium" | "High";

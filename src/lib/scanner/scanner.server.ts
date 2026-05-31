@@ -1,4 +1,4 @@
-import { classifyResidential, hasResidentialSignal } from "../residential";
+import { scoreResidential, statusFromScore } from "../residential";
 import type {
   BuildingResult,
   ConfidenceLevel,
@@ -137,52 +137,16 @@ interface OverpassElement {
   tags?: OsmTags;
 }
 
-interface RawElement {
-  id: string;
-  tags: OsmTags;
-  lat: number;
-  lng: number;
-}
-
-/**
- * Fold a residential `building:part`'s relevant tags into the parent building
- * so the parent reclassifies as residential / mixed-use instead of being
- * judged only on its (often commercial) ground-floor `building=*` tag.
- */
-function foldPartIntoParent(parent: OsmTags, part: OsmTags): void {
-  const partType = (part["building:part"] ?? "").toLowerCase();
-  if (
-    (partType === "apartments" || partType === "residential") &&
-    !parent["building:part"]
-  ) {
-    parent["building:part"] = part["building:part"]!;
-  }
-  if (part.residential && !parent.residential) {
-    parent.residential = part.residential;
-  }
-  if (part["building:flats"] && !parent["building:flats"]) {
-    parent["building:flats"] = part["building:flats"];
-  }
-  if (part["building:units"] && !parent["building:units"]) {
-    parent["building:units"] = part["building:units"];
-  }
-  if (part.name && !parent.name) parent.name = part.name;
-}
-
 export async function fetchOsmBuildings(
   lat: number,
   lng: number,
   radiusMeters: number,
 ): Promise<OsmBuilding[]> {
-  // Query both whole buildings AND building:parts — mixed-use developments
-  // (e.g. Solo District) tag residential towers as building:part=apartments.
   const query = `
     [out:json][timeout:25];
     (
       way["building"](around:${radiusMeters},${lat},${lng});
       relation["building"](around:${radiusMeters},${lat},${lng});
-      way["building:part"](around:${radiusMeters},${lat},${lng});
-      relation["building:part"](around:${radiusMeters},${lat},${lng});
     );
     out tags center;`;
 
@@ -197,61 +161,25 @@ export async function fetchOsmBuildings(
   if (!res.ok) throw new Error(`Overpass responded ${res.status}`);
   const data = (await res.json()) as { elements: OverpassElement[] };
 
-  const bases: RawElement[] = [];
-  const parts: RawElement[] = [];
+  const buildings: OsmBuilding[] = [];
   for (const el of data.elements ?? []) {
     const tags = el.tags ?? {};
     const blat = el.lat ?? el.center?.lat;
     const blng = el.lon ?? el.center?.lon;
     if (blat == null || blng == null) continue;
-    const raw: RawElement = {
+
+    const score = scoreResidential(tags);
+    buildings.push({
       id: `${el.type}/${el.id}`,
-      tags: { ...tags },
+      osmId: `${el.type}/${el.id}`,
+      name: tags.name ?? null,
+      address: buildAddress(tags),
       lat: blat,
       lng: blng,
-    };
-    // An element with a `building` tag is a candidate building; otherwise, if
-    // it only carries `building:part`, treat it as a part to merge.
-    if (tags.building) bases.push(raw);
-    else if (tags["building:part"]) parts.push(raw);
-  }
-
-  // Merge residential building:parts into the nearest parent building. Parts
-  // with no nearby parent become standalone candidates so they aren't lost.
-  const MERGE_DISTANCE = 75;
-  const standaloneParts: RawElement[] = [];
-  for (const part of parts) {
-    if (!hasResidentialSignal(part.tags)) continue;
-    let nearest: RawElement | null = null;
-    let best = Infinity;
-    for (const base of bases) {
-      const d = haversine(part.lat, part.lng, base.lat, base.lng);
-      if (d < best) {
-        best = d;
-        nearest = base;
-      }
-    }
-    if (nearest && best <= MERGE_DISTANCE) {
-      foldPartIntoParent(nearest.tags, part.tags);
-    } else {
-      standaloneParts.push(part);
-    }
-  }
-
-  const buildings: OsmBuilding[] = [];
-  for (const raw of [...bases, ...standaloneParts]) {
-    const { score, status } = classifyResidential(raw.tags);
-    buildings.push({
-      id: raw.id,
-      osmId: raw.id,
-      name: raw.tags.name ?? null,
-      address: buildAddress(raw.tags),
-      lat: raw.lat,
-      lng: raw.lng,
-      tags: raw.tags,
+      tags,
       residentialScore: score,
-      residentialStatus: status,
-      distanceMeters: haversine(lat, lng, raw.lat, raw.lng),
+      residentialStatus: statusFromScore(score),
+      distanceMeters: haversine(lat, lng, blat, blng),
     });
   }
   return buildings;

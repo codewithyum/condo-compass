@@ -9,7 +9,6 @@ interface Props {
   results: BuildingResult[];
   selectedId: string | null;
   showNoReviews: boolean;
-  showUncertain: boolean;
   onSelect: (id: string) => void;
 }
 
