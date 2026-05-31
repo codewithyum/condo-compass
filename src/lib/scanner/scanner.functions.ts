@@ -9,7 +9,7 @@ import {
 import type { OsmBuilding, ReviewSort } from "../types";
 
 const RADIUS_METERS = 1000;
-const MAX_BUILDINGS = 24;
+const MAX_BUILDINGS = 20;
 
 /** Autocomplete suggestions for the search input (debounced on client). */
 export const autocompleteLocation = createServerFn({ method: "POST" })
