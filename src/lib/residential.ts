@@ -2,8 +2,7 @@ import type { OsmTags, ResidentialStatus } from "./types";
 
 /**
  * Names commonly used by condo / apartment towers (incl. well-known
- * Burnaby/Vancouver developments like Solo District, Stratus, Altus, Cirrus,
- * Skyline).
+ * Burnaby/Vancouver developments like Solo District, Stratus, Altus, Cirrus).
  */
 const NAME_KEYWORDS = [
   "residence",
@@ -22,7 +21,6 @@ const NAME_KEYWORDS = [
   "stratus",
   "altus",
   "cirrus",
-  "skyline",
   "solo district",
 ];
 
@@ -35,23 +33,6 @@ function lower(v: string | undefined): string {
   return (v ?? "").toLowerCase();
 }
 
-/** Parse a numeric metre height out of a `height`/`building:height` tag. */
-function parseHeight(tags: OsmTags): number {
-  const raw = tags.height ?? tags["building:height"];
-  if (!raw) return NaN;
-  const m = String(raw).match(/[\d.]+/);
-  return m ? Number(m[0]) : NaN;
-}
-
-/** Whether the building is tall enough to read as a residential high-rise. */
-function isHighRise(tags: OsmTags): boolean {
-  const levels = Number(tags["building:levels"]);
-  if (!Number.isNaN(levels) && levels >= 8) return true;
-  const height = parseHeight(tags);
-  // ~3m / storey → 24m ≈ 8 storeys.
-  return !Number.isNaN(height) && height >= 24;
-}
-
 /**
  * Whether the tags carry any residential signal. Used both for status
  * derivation and to decide whether a `building:part` is worth merging into
@@ -60,9 +41,10 @@ function isHighRise(tags: OsmTags): boolean {
 export function hasResidentialSignal(tags: OsmTags): boolean {
   const building = lower(tags.building);
   const part = lower(tags["building:part"]);
-  const use = lower(tags["building:use"]);
   const residential = lower(tags.residential);
   const name = lower(tags.name);
+  const levels = Number(tags["building:levels"]);
+  const highRise = !Number.isNaN(levels) && levels >= 8;
 
   return (
     building === "apartments" ||
@@ -73,29 +55,22 @@ export function hasResidentialSignal(tags: OsmTags): boolean {
     building === "dormitory" ||
     part === "apartments" ||
     part === "residential" ||
-    use === "apartments" ||
-    use === "residential" ||
     residential === "apartments" ||
-    residential === "residential" ||
     Boolean(tags["building:flats"]) ||
     Boolean(tags["building:units"]) ||
-    Boolean(tags["addr:flats"]) ||
     NAME_KEYWORDS.some((kw) => name.includes(kw)) ||
-    ((building === "yes" || building === "") && isHighRise(tags))
+    ((building === "yes" || building === "") && highRise)
   );
 }
 
 /** Whether the tags carry a commercial / retail / office signal. */
 export function hasCommercialSignal(tags: OsmTags): boolean {
   const building = lower(tags.building);
-  const use = lower(tags["building:use"]);
   return (
     Boolean(tags.shop) ||
     Boolean(tags.office) ||
     building === "commercial" ||
     building === "retail" ||
-    use === "commercial" ||
-    use === "retail" ||
     Boolean(tags.amenity)
   );
 }
@@ -111,29 +86,24 @@ export function classifyResidential(tags: OsmTags): ResidentialClassification {
   let score = 0;
   const building = lower(tags.building);
   const part = lower(tags["building:part"]);
-  const use = lower(tags["building:use"]);
   const residential = lower(tags.residential);
   const name = lower(tags.name);
 
   const levels = Number(tags["building:levels"]);
   const hasLevels = !Number.isNaN(levels);
-  const highRise = isHighRise(tags);
+  const highRise = hasLevels && levels >= 8;
 
   const hasName = Boolean(tags.name);
   const hasAddress = Boolean(tags["addr:housenumber"] || tags["addr:street"]);
   const nameMatch = NAME_KEYWORDS.some((kw) => name.includes(kw));
-  const hasUnits = Boolean(
-    tags["building:flats"] || tags["building:units"] || tags["addr:flats"],
-  );
+  const hasUnits = Boolean(tags["building:flats"] || tags["building:units"]);
 
   /* ---- Positive signals ---- */
   if (building === "apartments") score += 60;
   if (building === "residential") score += 55;
   if (part === "apartments") score += 50;
   if (part === "residential") score += 50;
-  if (use === "apartments") score += 50;
-  if (use === "residential") score += 45;
-  if (residential === "apartments" || residential === "residential") score += 50;
+  if (residential === "apartments") score += 50;
   if (building === "house" || building === "detached") score += 40;
   if (building === "terrace" || building === "dormitory") score += 30;
   if (highRise) score += 35;
